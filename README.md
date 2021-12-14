@@ -1,68 +1,42 @@
-## Obsidian Sample Plugin
+# Obsidian Vim IM Select Plugin
 
-This is a sample plugin for Obsidian (https://obsidian.md).
+This plugin is used to automatically switch the current input method of the system when `vim key binding` is used in Obsidian, to prevent non-English input method from causing key binding failure in `vim normal` mode.
 
-This project uses Typescript to provide type checking and documentation.
-The repo depends on the latest plugin API (obsidian.d.ts) in Typescript Definition format, which contains TSDoc comments describing what it does.
+## Install
 
-**Note:** The Obsidian API is still in early alpha and is subject to change at any time!
+First, need to turn on `vim key binding` in Obsidian.
 
-This sample plugin demonstrates some of the basic functionality the plugin API can do.
-- Changes the default font color to red using `styles.css`.
-- Adds a ribbon icon, which shows a Notice when clicked.
-- Adds a command "Open Sample Modal" which opens a Modal.
-- Adds a plugin setting tab to the settings page.
-- Registers a global click event and output 'click' to the console.
-- Registers a global interval which logs 'setInterval' to the console.
+In setting of Obsidian, turn off `safe mode` then install this plugin.
 
-### First time developing plugins?
+Alternatively, manually install: copy `main.js` and `manifast.json` to `VAULT_ROOT/.obsidian/plugins/vim-im-select/`.
 
-Quick starting guide for new plugin devs:
+## Usage
 
-- Make a copy of this repo as a template with the "Use this template" button (login to GitHub if you don't see it).
-- Clone your repo to a local development folder. For convenience, you can place this folder in your `.obsidian/plugins/your-plugin-name` folder.
-- Install NodeJS, then run `npm i` in the command line under your repo folder.
-- Run `npm run dev` to compile your plugin from `main.ts` to `main.js`.
-- Make changes to `main.ts` (or create new `.ts` files). Those changes should be automatically compiled into `main.js`.
-- Reload Obsidian to load the new version of your plugin.
-- Enable plugin in settings window.
-- For updates to the Obsidian API run `npm update` in the command line under your repo folder.
+After enabling this plugin, you can find a setting tab in Setting.
 
-### Releasing new releases
+The setting options are devided into two parts, the first is for default platform, the second is for Windows platform.
 
-- Update your `manifest.json` with your new version number, such as `1.0.1`, and the minimum Obsidian version required for your latest release.
-- Update your `versions.json` file with `"new-plugin-version": "minimum-obsidian-version"` so older versions of Obsidian can download an older version of your plugin that's compatible.
-- Create new GitHub release using your new version number as the "Tag version". Use the exact version number, don't include a prefix `v`. See here for an example: https://github.com/obsidianmd/obsidian-sample-plugin/releases
-- Upload the files `manifest.json`, `main.js`, `styles.css` as binary attachments. Note: The manifest.json file must be in two places, first the root path of your repository and also in the release.
-- Publish the release.
+If you use Obsidian under the Windows platform, the plug-in will use the second part of the settings, otherwise the first part of the settings.
 
-### Adding your plugin to the community plugin list
+The options are similar in different platform.
 
-- Publish an initial version.
-- Make sure you have a `README.md` file in the root of your repo.
-- Make a pull request at https://github.com/obsidianmd/obsidian-releases to add your plugin.
+| Option              | Defination                                                                                                   |
+| ------------------- | ------------------------------------------------------------------------------------------------------------ |
+| `Default IM`        | specify the input method used in normal mode                                                                 |
+| `Obtaining Command` | Command to obtain current input method (must be excutable)                                                   |
+| `Switching Command` | Command to switch current input method (must be excutable, use `{im}` as placeholder of target input method) |
 
-### How to use
+Following is a example: 
+![example](./example.png)
 
-- Clone this repo.
-- `npm i` or `yarn` to install dependencies
-- `npm run dev` to start compilation in watch mode.
+**After activating the plugin in the first time and finishing setting, you need to restart Obsidian.**
 
-### Manually installing the plugin
+If you want to know more:
 
-- Copy over `main.js`, `styles.css`, `manifest.json` to your vault `VaultFolder/.obsidian/plugins/your-plugin-id/`.
+- The solution for switching input method on Windows[im-select](https://github.com/daipeihust/im-select)
+- Inspired from [vscodevim](https://github.com/VSCodeVim/Vim#input-method)
 
-### Improve code quality with eslint (optional)
-- [ESLint](https://eslint.org/) is a tool that analyzes your code to quickly find problems. You can run ESLint against your plugin to find common bugs and ways to improve your code. 
-- To use eslint with this project, make sure to install eslint from terminal:
-  - `npm install -g eslint`
-- To use eslint to analyze this project use this command:
-  - `eslint main.ts`
-  - eslint will then create a report with suggestions for code improvement by file and line number.
-- If your source code is in a folder, such as `src`, you can use eslint with this command to analyze all files in that folder:
-  - `eslint .\src\`
+## Credit
 
-
-### API Documentation
-
-See https://github.com/obsidianmd/obsidian-api
+- [im-select](https://github.com/daipeihust/im-select)
+- [obsidian-vimrc-support](https://github.com/esm7/obsidian-vimrc-support)

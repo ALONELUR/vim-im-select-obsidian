@@ -1,85 +1,120 @@
 import { App, Editor, MarkdownView, Modal, Notice, Plugin, PluginSettingTab, Setting } from 'obsidian';
 
 // Remember to rename these classes and interfaces!
-
-interface MyPluginSettings {
-	mySetting: string;
+const enum vimStatusForIm {
+	insert,
+	noInsert
 }
 
-const DEFAULT_SETTINGS: MyPluginSettings = {
-	mySetting: 'default'
+interface VimImPluginSettings {
+	defaultIM: string;
+	obtainCmd: string;
+	switchCmd: string;
+	windowsDefaultIM: string;
+	windowsObtainCmd: string;
+	windowsSwitchCmd: string;
 }
 
-export default class MyPlugin extends Plugin {
-	settings: MyPluginSettings;
+const DEFAULT_SETTINGS: VimImPluginSettings = {
+	defaultIM: '',
+	obtainCmd: '',
+	switchCmd: '',
+	windowsDefaultIM: '',
+	windowsObtainCmd: '',
+	windowsSwitchCmd: '',
+}
+
+export default class VimImPlugin extends Plugin {
+	settings: VimImPluginSettings;
+	private currentVimStatus: vimStatusForIm = vimStatusForIm.noInsert;
+	private currentInsertIM: string = '';
+	private isWinPlatform: boolean = false;
 
 	async onload() {
 		await this.loadSettings();
-
-		// This creates an icon in the left ribbon.
-		const ribbonIconEl = this.addRibbonIcon('dice', 'Sample Plugin', (evt: MouseEvent) => {
-			// Called when the user clicks the icon.
-			new Notice('This is a notice!');
-		});
-		// Perform additional things with the ribbon
-		ribbonIconEl.addClass('my-plugin-ribbon-class');
-
-		// This adds a status bar item to the bottom of the app. Does not work on mobile apps.
-		const statusBarItemEl = this.addStatusBarItem();
-		statusBarItemEl.setText('Status Bar Text');
-
-		// This adds a simple command that can be triggered anywhere
-		this.addCommand({
-			id: 'open-sample-modal-simple',
-			name: 'Open sample modal (simple)',
-			callback: () => {
-				new SampleModal(this.app).open();
-			}
-		});
-		// This adds an editor command that can perform some operation on the current editor instance
-		this.addCommand({
-			id: 'sample-editor-command',
-			name: 'Sample editor command',
-			editorCallback: (editor: Editor, view: MarkdownView) => {
-				console.log(editor.getSelection());
-				editor.replaceSelection('Sample Editor Command');
-			}
-		});
-		// This adds a complex command that can check whether the current state of the app allows execution of the command
-		this.addCommand({
-			id: 'open-sample-modal-complex',
-			name: 'Open sample modal (complex)',
-			checkCallback: (checking: boolean) => {
-				// Conditions to check
-				const markdownView = this.app.workspace.getActiveViewOfType(MarkdownView);
-				if (markdownView) {
-					// If checking is true, we're simply "checking" if the command can be run.
-					// If checking is false, then we want to actually perform the operation.
-					if (!checking) {
-						new SampleModal(this.app).open();
-					}
-
-					// This command will only show up in Command Palette when the check function returns true
-					return true;
-				}
-			}
+		this.app.workspace.on('codemirror', (cm: CodeMirror.Editor) => {
+			cm.on('vim-mode-change', (modeObj: any) => {
+				if (modeObj)
+					this.onVimModeChanged(modeObj);
+			});
 		});
 
 		// This adds a settings tab so the user can configure various aspects of the plugin
 		this.addSettingTab(new SampleSettingTab(this.app, this));
 
-		// If the plugin hooks up any global DOM events (on parts of the app that doesn't belong to this plugin)
-		// Using this function will automatically remove the event listener when this plugin is disabled.
-		this.registerDomEvent(document, 'click', (evt: MouseEvent) => {
-			console.log('click', evt);
-		});
+		var os = require('os');
+		this.isWinPlatform = os.type() == 'Windows_NT';
 
-		// When registering intervals, this function will automatically clear the interval when the plugin is disabled.
-		this.registerInterval(window.setInterval(() => console.log('setInterval'), 5 * 60 * 1000));
+		this.currentInsertIM = this.isWinPlatform ? this.settings.windowsDefaultIM : this.settings.defaultIM;
+
+		if (this.isWinPlatform) {
+			console.log("VimIm Use Windows config");
+		}
+	}
+
+	onVimModeChanged(modeObj: any) {
+		const { exec } = require('child_process');
+		var switchToInsert: string;
+		if (this.currentInsertIM) {
+			switchToInsert = this.isWinPlatform ?
+				this.settings.windowsSwitchCmd.replace(/{im}/, this.currentInsertIM) :
+				this.settings.switchCmd.replace(/{im}/, this.currentInsertIM);
+		}
+
+		const obtainc = this.isWinPlatform ?
+			this.settings.windowsObtainCmd : this.settings.obtainCmd;
+
+		const switchFromInsert = this.isWinPlatform ?
+			this.settings.windowsSwitchCmd.replace(/{im}/, this.settings.windowsDefaultIM) :
+			this.settings.switchCmd.replace(/{im}/, this.settings.defaultIM);
+
+		switch (modeObj.mode) {
+			case "insert":
+				this.currentVimStatus = vimStatusForIm.insert;
+				console.log("change to insert");
+				if (typeof switchToInsert != 'undefined' && switchToInsert) {
+					exec(switchToInsert, (error: any, stdout: any, stderr: any) => {
+						if (error) {
+							console.error(`switch error: ${error}`);
+							return;
+						}
+						console.log(`switch im: ${switchToInsert}`);
+					});
+				}
+
+				break;
+			default:
+				console.log("change to noInsert");
+				//[0]: Obtian im in Insert Mode
+				if (typeof obtainc != 'undefined' && obtainc) {
+					exec(obtainc, (error: any, stdout: any, stderr: any) => {
+						if (error) {
+							console.error(`obtain error: ${error}`);
+							return;
+						}
+						this.currentInsertIM = stdout;
+						console.log(`obtain im: ${this.currentInsertIM}`);
+					});
+				}
+				//[1]: Switch to default im
+				if (typeof switchFromInsert != 'undefined' && switchFromInsert) {
+					exec(switchFromInsert, (error: any, stdout: any, stderr: any) => {
+						if (error) {
+							console.error(`switch error: ${error}`);
+							return;
+						}
+						console.log(`switch im: ${switchFromInsert}`);
+					});
+				}
+
+				this.currentVimStatus = vimStatusForIm.noInsert;
+				break;
+		}
+		// this.vimStatusBar.setText(this.currentVimStatus);
 	}
 
 	onunload() {
-
+		console.log("onunload");
 	}
 
 	async loadSettings() {
@@ -89,48 +124,91 @@ export default class MyPlugin extends Plugin {
 	async saveSettings() {
 		await this.saveData(this.settings);
 	}
-}
 
-class SampleModal extends Modal {
-	constructor(app: App) {
-		super(app);
-	}
-
-	onOpen() {
-		const {contentEl} = this;
-		contentEl.setText('Woah!');
-	}
-
-	onClose() {
-		const {contentEl} = this;
-		contentEl.empty();
-	}
 }
 
 class SampleSettingTab extends PluginSettingTab {
-	plugin: MyPlugin;
+	plugin: VimImPlugin;
 
-	constructor(app: App, plugin: MyPlugin) {
+	constructor(app: App, plugin: VimImPlugin) {
 		super(app, plugin);
 		this.plugin = plugin;
 	}
 
 	display(): void {
-		const {containerEl} = this;
+		const { containerEl } = this;
 
 		containerEl.empty();
 
-		containerEl.createEl('h2', {text: 'Settings for my awesome plugin.'});
+		containerEl.createEl('h2', { text: 'Vim IM Select Settings.' });
 
+		containerEl.createEl('h3', { text: 'Settings for default platform.' });
 		new Setting(containerEl)
-			.setName('Setting #1')
-			.setDesc('It\'s a secret')
+			.setName('Default IM')
+			.setDesc('IM for normal mode')
 			.addText(text => text
-				.setPlaceholder('Enter your secret')
-				.setValue(this.plugin.settings.mySetting)
+				.setPlaceholder('Default IM')
+				.setValue(this.plugin.settings.defaultIM)
 				.onChange(async (value) => {
-					console.log('Secret: ' + value);
-					this.plugin.settings.mySetting = value;
+					console.log('Default IM: ' + value);
+					this.plugin.settings.defaultIM = value;
+					await this.plugin.saveSettings();
+				}));
+		new Setting(containerEl)
+			.setName('Obtaining Command')
+			.setDesc('Command for obtaining current IM(must be excutable)')
+			.addText(text => text
+				.setPlaceholder('Obtaining Command')
+				.setValue(this.plugin.settings.obtainCmd)
+				.onChange(async (value) => {
+					console.log('Obtain Cmd: ' + value);
+					this.plugin.settings.obtainCmd = value;
+					await this.plugin.saveSettings();
+				}));
+		new Setting(containerEl)
+			.setName('Switching Command')
+			.setDesc('Command for switching to specific IM(must be excutable)')
+			.addText(text => text
+				.setPlaceholder('Use {im} as placeholder of IM')
+				.setValue(this.plugin.settings.switchCmd)
+				.onChange(async (value) => {
+					console.log('Switch Cmd: ' + value);
+					this.plugin.settings.switchCmd = value;
+					await this.plugin.saveSettings();
+				}));
+
+		containerEl.createEl('h3', { text: 'Settings for Windows platform.' });
+		new Setting(containerEl)
+			.setName('Windows Default IM')
+			.setDesc('IM for normal mode')
+			.addText(text => text
+				.setPlaceholder('Default IM')
+				.setValue(this.plugin.settings.windowsDefaultIM)
+				.onChange(async (value) => {
+					console.log('Default IM: ' + value);
+					this.plugin.settings.windowsDefaultIM = value;
+					await this.plugin.saveSettings();
+				}));
+		new Setting(containerEl)
+			.setName('Obtaining Command on Windows')
+			.setDesc('Command for obtaining current IM(must be excutable)')
+			.addText(text => text
+				.setPlaceholder('Obtaining Command')
+				.setValue(this.plugin.settings.windowsObtainCmd)
+				.onChange(async (value) => {
+					console.log('Obtain Cmd: ' + value);
+					this.plugin.settings.windowsObtainCmd = value;
+					await this.plugin.saveSettings();
+				}));
+		new Setting(containerEl)
+			.setName('Switching Command on Windows')
+			.setDesc('Command for switching to specific IM(must be excutable)')
+			.addText(text => text
+				.setPlaceholder('Use {im} as placeholder of IM')
+				.setValue(this.plugin.settings.windowsSwitchCmd)
+				.onChange(async (value) => {
+					console.log('Switch Cmd: ' + value);
+					this.plugin.settings.windowsSwitchCmd = value;
 					await this.plugin.saveSettings();
 				}));
 	}
