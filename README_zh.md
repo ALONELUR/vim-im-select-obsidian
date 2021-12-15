@@ -1,5 +1,7 @@
 # Obsidian Vim IM Select Plugin
 
+[English ver.](./README.md)
+
 本插件用于在Obsidian.md中使用Vim时，自动切换当前输入法，以防止**非英文输入法**
 导致在Vim normal模式下按键失效。
 

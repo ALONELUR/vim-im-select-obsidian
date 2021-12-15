@@ -1,5 +1,7 @@
 # Obsidian Vim IM Select Plugin
 
+[Chinese ver. 中文版本](./README_zh.md)
+
 This plugin is used to automatically switch the current input method of the system when `vim key binding` is used in Obsidian, to prevent non-English input method from causing key binding failure in `vim normal` mode.
 
 ## Install
