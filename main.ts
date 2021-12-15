@@ -1,10 +1,4 @@
-import { App, Editor, MarkdownView, Modal, Notice, Plugin, PluginSettingTab, Setting } from 'obsidian';
-
-// Remember to rename these classes and interfaces!
-const enum vimStatusForIm {
-	insert,
-	noInsert
-}
+import { App, Plugin, PluginSettingTab, Setting } from 'obsidian';
 
 interface VimImPluginSettings {
 	defaultIM: string;
@@ -26,9 +20,8 @@ const DEFAULT_SETTINGS: VimImPluginSettings = {
 
 export default class VimImPlugin extends Plugin {
 	settings: VimImPluginSettings;
-	private currentVimStatus: vimStatusForIm = vimStatusForIm.noInsert;
-	private currentInsertIM: string = '';
-	private isWinPlatform: boolean = false;
+	private currentInsertIM = '';
+	private isWinPlatform = false;
 
 	async onload() {
 		await this.loadSettings();
@@ -42,7 +35,7 @@ export default class VimImPlugin extends Plugin {
 		// This adds a settings tab so the user can configure various aspects of the plugin
 		this.addSettingTab(new SampleSettingTab(this.app, this));
 
-		var os = require('os');
+		const { os } = require('os');
 		this.isWinPlatform = os.type() == 'Windows_NT';
 
 		this.currentInsertIM = this.isWinPlatform ? this.settings.windowsDefaultIM : this.settings.defaultIM;
@@ -54,7 +47,7 @@ export default class VimImPlugin extends Plugin {
 
 	onVimModeChanged(modeObj: any) {
 		const { exec } = require('child_process');
-		var switchToInsert: string;
+		let switchToInsert: string;
 		if (this.currentInsertIM) {
 			switchToInsert = this.isWinPlatform ?
 				this.settings.windowsSwitchCmd.replace(/{im}/, this.currentInsertIM) :
@@ -70,7 +63,6 @@ export default class VimImPlugin extends Plugin {
 
 		switch (modeObj.mode) {
 			case "insert":
-				this.currentVimStatus = vimStatusForIm.insert;
 				console.log("change to insert");
 				if (typeof switchToInsert != 'undefined' && switchToInsert) {
 					exec(switchToInsert, (error: any, stdout: any, stderr: any) => {
@@ -107,7 +99,6 @@ export default class VimImPlugin extends Plugin {
 					});
 				}
 
-				this.currentVimStatus = vimStatusForIm.noInsert;
 				break;
 		}
 		// this.vimStatusBar.setText(this.currentVimStatus);
