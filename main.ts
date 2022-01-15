@@ -24,6 +24,7 @@ SOFTWARE.
 import { App, Plugin, PluginSettingTab, Setting, MarkdownView } from 'obsidian';
 
 import * as os from 'os';
+import * as cprcs from 'child_process';
 interface VimImPluginSettings {
 	defaultIM: string;
 	obtainCmd: string;
@@ -45,9 +46,13 @@ export default class VimImPlugin extends Plugin {
 	settings: VimImPluginSettings;
 	private currentInsertIM = '';
 	private isWinPlatform = false;
+	private isDarwinPlatform = false;
+	private isReadyReadObtIm = false;
 
 	private initialized = false;
 	private editorMode: 'cm5' | 'cm6' = null;
+
+	private childprocess: cprcs.ChildProcess = null;
 
 	async onload() {
 		await this.loadSettings();
@@ -78,11 +83,37 @@ export default class VimImPlugin extends Plugin {
 
 		console.log("VimIm::OS type: " + os.type());
 		this.isWinPlatform = os.type() == 'Windows_NT';
+		this.isDarwinPlatform = os.type() == 'Darwin';
 
 		this.currentInsertIM = this.isWinPlatform ? this.settings.windowsDefaultIM : this.settings.defaultIM;
 
 		if (this.isWinPlatform) {
 			console.log("VimIm Use Windows config");
+		}
+
+		if (this.isDarwinPlatform) {
+			console.log("VimIm Use Darwin config");
+			this.childprocess = cprcs.spawn('/bin/zsh', ['--interactive'], { shell: true });
+
+			this.childprocess.stdout.on("data", (data) => {
+				console.log(`out:${data}`);
+				if (this.isReadyReadObtIm) {
+					console.log(`Obtain IM: ${data}`);
+					this.isReadyReadObtIm = false;
+				}
+			});
+
+			this.childprocess.stderr.on("data", (data) => {
+				console.error(`err:${data}`);
+				if (this.isReadyReadObtIm) {
+					console.log(`Obtain IM: ${data}`);
+					this.isReadyReadObtIm = false;
+				}
+			});
+
+			this.childprocess.on("close", (code) => {
+				console.log(`exit with code ${code}`);
+			});
 		}
 	}
 
@@ -115,8 +146,67 @@ export default class VimImPlugin extends Plugin {
 			return (view as any).sourceMode?.cmEditor;
 	}
 
+	private switchToInsertImpl(command: string) {
+		if (this.isDarwinPlatform) {
+			this.childprocess.stdin.write(command, (error: any) => {
+				if (error) {
+					console.error(`switch error: ${error}`);
+					return;
+				}
+			});
+		} else {
+			cprcs.exec(command, (error: any, stdout: any, stderr: any) => {
+				if (error) {
+					console.error(`switch error: ${error}`);
+					return;
+				}
+				console.log(`switch im: ${command}`);
+			});
+		}
+	}
+
+	private obtainImImpl(command: string) {
+		if (this.isDarwinPlatform) {
+			this.isReadyReadObtIm = true;
+			this.childprocess.stdin.write(command, (error: any) => {
+				if (error) {
+					console.error(`switch error: ${error}`);
+					return;
+				}
+			});
+		} else {
+			cprcs.exec(command, (error: any, stdout: any, stderr: any) => {
+				if (error) {
+					console.error(`obtain error: ${error}`);
+					return;
+				}
+				this.currentInsertIM = stdout;
+				console.log(`obtain im: ${this.currentInsertIM}`);
+			});
+
+		}
+	}
+
+	private switchFromInsertImpl(command: string) {
+		if (this.isDarwinPlatform) {
+			this.childprocess.stdin.write(command, (error: any) => {
+				if (error) {
+					console.error(`switch error: ${error}`);
+					return;
+				}
+			});
+		} else {
+			cprcs.exec(command, (error: any, stdout: any, stderr: any) => {
+				if (error) {
+					console.error(`switch error: ${error}`);
+					return;
+				}
+				console.log(`switch im: ${command}`);
+			});
+		}
+	}
+
 	onVimModeChanged(modeObj: any) {
-		const { exec } = require('child_process');
 		let switchToInsert: string;
 		if (this.currentInsertIM) {
 			switchToInsert = this.isWinPlatform ?
@@ -135,38 +225,18 @@ export default class VimImPlugin extends Plugin {
 			case "insert":
 				console.log("change to insert");
 				if (typeof switchToInsert != 'undefined' && switchToInsert) {
-					exec(switchToInsert, (error: any, stdout: any, stderr: any) => {
-						if (error) {
-							console.error(`switch error: ${error}`);
-							return;
-						}
-						console.log(`switch im: ${switchToInsert}`);
-					});
+					this.switchToInsertImpl(switchToInsert);
 				}
-
 				break;
 			default:
 				console.log("change to noInsert");
 				//[0]: Obtian im in Insert Mode
 				if (typeof obtainc != 'undefined' && obtainc) {
-					exec(obtainc, (error: any, stdout: any, stderr: any) => {
-						if (error) {
-							console.error(`obtain error: ${error}`);
-							return;
-						}
-						this.currentInsertIM = stdout;
-						console.log(`obtain im: ${this.currentInsertIM}`);
-					});
+					this.obtainImImpl(obtainc);
 				}
 				//[1]: Switch to default im
 				if (typeof switchFromInsert != 'undefined' && switchFromInsert) {
-					exec(switchFromInsert, (error: any, stdout: any, stderr: any) => {
-						if (error) {
-							console.error(`switch error: ${error}`);
-							return;
-						}
-						console.log(`switch im: ${switchFromInsert}`);
-					});
+					this.switchFromInsertImpl(switchFromInsert);
 				}
 
 				break;
