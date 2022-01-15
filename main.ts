@@ -23,6 +23,7 @@ SOFTWARE.
 */
 import { App, Plugin, PluginSettingTab, Setting, MarkdownView } from 'obsidian';
 
+import * as os from 'os';
 interface VimImPluginSettings {
 	defaultIM: string;
 	obtainCmd: string;
@@ -40,7 +41,6 @@ const DEFAULT_SETTINGS: VimImPluginSettings = {
 	windowsObtainCmd: '',
 	windowsSwitchCmd: '',
 }
-
 export default class VimImPlugin extends Plugin {
 	settings: VimImPluginSettings;
 	private currentInsertIM = '';
@@ -76,7 +76,7 @@ export default class VimImPlugin extends Plugin {
 		// This adds a settings tab so the user can configure various aspects of the plugin
 		this.addSettingTab(new SampleSettingTab(this.app, this));
 
-		const { os } = require('os');
+		console.log("VimIm::OS type: " + os.type());
 		this.isWinPlatform = os.type() == 'Windows_NT';
 
 		this.currentInsertIM = this.isWinPlatform ? this.settings.windowsDefaultIM : this.settings.defaultIM;
