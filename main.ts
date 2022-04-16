@@ -44,6 +44,7 @@ const DEFAULT_SETTINGS: VimImPluginSettings = {
 export default class VimImPlugin extends Plugin {
 	settings: VimImPluginSettings;
 	private currentInsertIM = '';
+	private previousMode = '';
 	private isWinPlatform = false;
 
 	private initialized = false;
@@ -70,6 +71,8 @@ export default class VimImPlugin extends Plugin {
 					});
 				}
 			}
+
+			this.previousMode = "normal";
 		});
 
 
@@ -146,6 +149,9 @@ export default class VimImPlugin extends Plugin {
 
 				break;
 			default:
+				if (this.previousMode != "insert") {
+					break;
+				}
 				console.log("change to noInsert");
 				//[0]: Obtian im in Insert Mode
 				if (typeof obtainc != 'undefined' && obtainc) {
@@ -171,7 +177,7 @@ export default class VimImPlugin extends Plugin {
 
 				break;
 		}
-		// this.vimStatusBar.setText(this.currentVimStatus);
+		this.previousMode = modeObj.mode;
 	}
 
 	onunload() {
