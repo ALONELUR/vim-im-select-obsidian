@@ -64,8 +64,13 @@ export default class VimImPlugin extends Plugin {
 				var editor = this.getCodeMirror(view);
 
 				if (editor) {
+					// check if not in insert mode(normal or visual mode), swith to normal at first
+					if (!editor.state.vim.insertMode) {
+						this.switchToNormal();
+					}
 					editor.on('vim-mode-change', (modeObj: any) => {
 						if (modeObj) {
+							// when editor is ready, set default mode to normal
 							this.onVimModeChanged(modeObj);
 						}
 					});
@@ -118,7 +123,7 @@ export default class VimImPlugin extends Plugin {
 			return (view as any).sourceMode?.cmEditor;
 	}
 
-	onVimModeChanged(modeObj: any) {
+	switchToInsert() {
 		const { exec } = require('child_process');
 		let switchToInsert: string;
 		if (this.currentInsertIM) {
@@ -127,57 +132,65 @@ export default class VimImPlugin extends Plugin {
 				this.settings.switchCmd.replace(/{im}/, this.currentInsertIM);
 		}
 
-		const obtainc = this.isWinPlatform ?
-			this.settings.windowsObtainCmd : this.settings.obtainCmd;
+		console.log("change to insert");
+		if (typeof switchToInsert != 'undefined' && switchToInsert) {
+			exec(switchToInsert, (error: any, stdout: any, stderr: any) => {
+				if (error) {
+					console.error(`switch error: ${error}`);
+					return;
+				}
+				console.log(`switch im: ${switchToInsert}`);
+			});
+		}
 
+		this.previousMode = "insert"
+	}
+
+	switchToNormal() {
+		const { exec } = require('child_process');
 		const switchFromInsert = this.isWinPlatform ?
 			this.settings.windowsSwitchCmd.replace(/{im}/, this.settings.windowsDefaultIM) :
 			this.settings.switchCmd.replace(/{im}/, this.settings.defaultIM);
+		const obtainc = this.isWinPlatform ?
+			this.settings.windowsObtainCmd : this.settings.obtainCmd;
+		console.log("change to noInsert");
+		//[0]: Obtian im in Insert Mode
+		if (typeof obtainc != 'undefined' && obtainc) {
+			exec(obtainc, (error: any, stdout: any, stderr: any) => {
+				if (error) {
+					console.error(`obtain error: ${error}`);
+					return;
+				}
+				this.currentInsertIM = stdout;
+				console.log(`obtain im: ${this.currentInsertIM}`);
+			});
+		}
+		//[1]: Switch to default im
+		if (typeof switchFromInsert != 'undefined' && switchFromInsert) {
+			exec(switchFromInsert, (error: any, stdout: any, stderr: any) => {
+				if (error) {
+					console.error(`switch error: ${error}`);
+					return;
+				}
+				console.log(`switch im: ${switchFromInsert}`);
+			});
+		}
 
+		this.previousMode = "normal"
+	}
+
+	onVimModeChanged(modeObj: any) {
 		switch (modeObj.mode) {
 			case "insert":
-				console.log("change to insert");
-				if (typeof switchToInsert != 'undefined' && switchToInsert) {
-					exec(switchToInsert, (error: any, stdout: any, stderr: any) => {
-						if (error) {
-							console.error(`switch error: ${error}`);
-							return;
-						}
-						console.log(`switch im: ${switchToInsert}`);
-					});
-				}
-
+				this.switchToInsert();
 				break;
 			default:
 				if (this.previousMode != "insert") {
 					break;
 				}
-				console.log("change to noInsert");
-				//[0]: Obtian im in Insert Mode
-				if (typeof obtainc != 'undefined' && obtainc) {
-					exec(obtainc, (error: any, stdout: any, stderr: any) => {
-						if (error) {
-							console.error(`obtain error: ${error}`);
-							return;
-						}
-						this.currentInsertIM = stdout;
-						console.log(`obtain im: ${this.currentInsertIM}`);
-					});
-				}
-				//[1]: Switch to default im
-				if (typeof switchFromInsert != 'undefined' && switchFromInsert) {
-					exec(switchFromInsert, (error: any, stdout: any, stderr: any) => {
-						if (error) {
-							console.error(`switch error: ${error}`);
-							return;
-						}
-						console.log(`switch im: ${switchFromInsert}`);
-					});
-				}
-
+				this.switchToNormal();
 				break;
 		}
-		this.previousMode = modeObj.mode;
 	}
 
 	onunload() {
