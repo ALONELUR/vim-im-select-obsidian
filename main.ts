@@ -161,19 +161,20 @@ export default class VimImPlugin extends Plugin {
 				}
 				this.currentInsertIM = stdout;
 				console.debug(`obtain im: ${this.currentInsertIM}`);
-			});
-		}
-		//[1]: Switch to default im
-		if (typeof switchFromInsert != 'undefined' && switchFromInsert) {
-			exec(switchFromInsert, (error: any, stdout: any, stderr: any) => {
-				if (error) {
-					console.error(`switch error: ${error}`);
-					return;
+				
+				//[1]: Switch to default im
+				if (typeof switchFromInsert != 'undefined' && switchFromInsert) {
+					exec(switchFromInsert, (error: any, stdout: any, stderr: any) => {
+						if (error) {
+							console.error(`switch error: ${error}`);
+							return;
+						}
+						console.debug(`switch im: ${switchFromInsert}`);
+					});
 				}
-				console.debug(`switch im: ${switchFromInsert}`);
+				this.previousMode = "normal"
 			});
 		}
-
 		this.previousMode = "normal"
 	}
 
