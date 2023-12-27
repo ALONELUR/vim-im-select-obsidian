@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 /*
 MIT License
 
@@ -47,21 +48,15 @@ export default class VimImPlugin extends Plugin {
 	private previousMode = '';
 	private isWinPlatform = false;
 
-	private initialized = false;
-	private editorMode: 'cm5' | 'cm6' = null;
-
 	async onload() {
 		await this.loadSettings();
 
 		// when open a file, to initialize current
 		// editor type CodeMirror5 or CodeMirror6
 		this.app.workspace.on('file-open', async (_file) => {
-			if (!this.initialized)
-				await this.initialize();
-
-			let view = this.getActiveView();
+			const view = this.getActiveView();
 			if (view) {
-				var editor = this.getCodeMirror(view);
+				const editor = this.getCodeMirror(view);
 
 				if (editor) {
 					// check if not in insert mode(normal or visual mode), swith to normal at first
@@ -92,33 +87,13 @@ export default class VimImPlugin extends Plugin {
 		}
 	}
 
-	async initialize() {
-		if (this.initialized)
-			return;
-
-		// Determine if we have the legacy Obsidian editor (CM5) or the new one (CM6).
-		// This is only available after Obsidian is fully loaded, so we do it as part of the `file-open` event.
-		if ('editor:toggle-source' in (this.app as any).commands.editorCommands) {
-			this.editorMode = 'cm6';
-			console.debug('Vimrc plugin: using CodeMirror 6 mode');
-		} else {
-			this.editorMode = 'cm5';
-			console.debug('Vimrc plugin: using CodeMirror 5 mode');
-		}
-
-		this.initialized = true;
-	}
-
 	private getActiveView(): MarkdownView {
 		return this.app.workspace.getActiveViewOfType(MarkdownView);
 	}
 
 	private getCodeMirror(view: MarkdownView): CodeMirror.Editor {
 		// For CM6 this actually returns an instance of the object named CodeMirror from cm_adapter of codemirror_vim
-		if (this.editorMode == 'cm6')
-			return (view as any).sourceMode?.cmEditor?.cm?.cm;
-		else
-			return (view as any).sourceMode?.cmEditor;
+		return (view as any).sourceMode?.cmEditor?.cm?.cm;
 	}
 
 	switchToInsert() {
