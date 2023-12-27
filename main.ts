@@ -1,4 +1,3 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
 /*
 MIT License
 
@@ -59,10 +58,6 @@ export default class VimImPlugin extends Plugin {
 				const editor = this.getCodeMirror(view);
 
 				if (editor) {
-					// check if not in insert mode(normal or visual mode), swith to normal at first
-					if (!editor.state.vim.insertMode) {
-						this.switchToNormal();
-					}
 					editor.on('vim-mode-change', (modeObj: any) => {
 						if (modeObj) {
 							// when editor is ready, set default mode to normal

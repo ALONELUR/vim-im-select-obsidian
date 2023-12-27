@@ -1,8 +1,8 @@
 {
 	"id": "vim-im-select",
 	"name": "Vim IM Select",
-	"version": "0.1.3",
-	"minAppVersion": "0.12.0",
+	"version": "0.2.0",
+	"minAppVersion": "1.5.0",
 	"description": "Support auto select the apposite input method in different vim mode",
 	"author": "Alonelur",
 	"authorUrl": "https://github.com/ALONELUR",
