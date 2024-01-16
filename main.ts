@@ -65,10 +65,10 @@ export default class VimImPlugin extends Plugin {
 
 				if (editor) {
 					// check if not in insert mode(normal or visual mode), swith to normal at first
-					if (!editor.state.vim.insertMode) {
+					if (!editor.cm.cm.state.vim.insertMode) {
 						this.switchToNormal();
 					}
-					editor.on('vim-mode-change', (modeObj: any) => {
+					editor.cm.cm.on('vim-mode-change', (modeObj: any) => {
 						if (modeObj) {
 							// when editor is ready, set default mode to normal
 							this.onVimModeChanged(modeObj);
