@@ -41,6 +41,11 @@ const DEFAULT_SETTINGS: VimImPluginSettings = {
 	windowsObtainCmd: '',
 	windowsSwitchCmd: '',
 }
+
+function isEmpty(obj : any) {
+  return obj && typeof obj === "object" && Object.keys(obj).length === 0;
+}
+
 export default class VimImPlugin extends Plugin {
 	settings: VimImPluginSettings;
 	private currentInsertIM = '';
@@ -52,18 +57,13 @@ export default class VimImPlugin extends Plugin {
 
 		// when open a file, to initialize current
 		// editor type CodeMirror5 or CodeMirror6
-		this.app.workspace.on('file-open', async (_file) => {
+		this.app.workspace.on('active-leaf-change', async () => {
 			const view = this.getActiveView();
 			if (view) {
 				const editor = this.getCodeMirror(view);
-
 				if (editor) {
-					editor.on('vim-mode-change', (modeObj: any) => {
-						if (modeObj) {
-							// when editor is ready, set default mode to normal
-							this.onVimModeChanged(modeObj);
-						}
-					});
+					editor.off('vim-mode-change', this.onVimModeChanged);
+					editor.on('vim-mode-change', this.onVimModeChanged);
 				}
 			}
 		});
@@ -91,7 +91,7 @@ export default class VimImPlugin extends Plugin {
 		return (view as any).sourceMode?.cmEditor?.cm?.cm;
 	}
 
-	switchToInsert() {
+	async switchToInsert() {
 		const { exec } = require('child_process');
 		let switchToInsert: string;
 		if (this.currentInsertIM) {
@@ -114,7 +114,7 @@ export default class VimImPlugin extends Plugin {
 		this.previousMode = "insert"
 	}
 
-	switchToNormal() {
+	async switchToNormal() {
 		const { exec } = require('child_process');
 		const switchFromInsert = this.isWinPlatform ?
 			this.settings.windowsSwitchCmd.replace(/{im}/, this.settings.windowsDefaultIM) :
@@ -147,7 +147,10 @@ export default class VimImPlugin extends Plugin {
 		this.previousMode = "normal"
 	}
 
-	onVimModeChanged(modeObj: any) {
+	onVimModeChanged = async (modeObj: any) => {
+		if (isEmpty(modeObj)) {
+			return;
+		}
 		switch (modeObj.mode) {
 			case "insert":
 				this.switchToInsert();
@@ -159,7 +162,7 @@ export default class VimImPlugin extends Plugin {
 				this.switchToNormal();
 				break;
 		}
-	}
+	};
 
 	onunload() {
 		console.debug("onunload");
