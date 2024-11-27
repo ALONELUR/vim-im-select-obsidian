@@ -1,7 +1,7 @@
 {
-	"name": "obsidian-sample-plugin",
-	"version": "0.12.0",
-	"description": "This is a sample plugin for Obsidian (https://obsidian.md)",
+	"name": "obsidian-vim-im-select",
+	"version": "0.2.1",
+	"description": "Support auto select the apposite input method in different vim mode",
 	"main": "main.js",
 	"scripts": {
 		"dev": "node esbuild.config.mjs",
