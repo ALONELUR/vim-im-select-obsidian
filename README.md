@@ -4,6 +4,9 @@
 
 This plugin is used to automatically switch the current input method of the system when `vim key binding` is used in Obsidian, to prevent non-English input method from causing key binding failure in `vim normal` mode.
 
+本插件用于在Obsidian.md中使用Vim时，自动切换当前输入法，以防止**非英文输入法**
+导致在Vim normal模式下按键失效。
+
 ## Install
 
 First, need to turn on `vim key binding` in Obsidian.
