@@ -31,6 +31,9 @@ interface VimImPluginSettings {
 	windowsDefaultIM: string;
 	windowsObtainCmd: string;
 	windowsSwitchCmd: string;
+	macDefaultIM: string;
+	macObtainCmd: string;
+	macSwitchCmd: string;
 }
 
 const DEFAULT_SETTINGS: VimImPluginSettings = {
@@ -40,6 +43,9 @@ const DEFAULT_SETTINGS: VimImPluginSettings = {
 	windowsDefaultIM: '',
 	windowsObtainCmd: '',
 	windowsSwitchCmd: '',
+	macDefaultIM: "",
+	macObtainCmd: "",
+	macSwitchCmd: ""
 }
 
 function isEmpty(obj : any) {
@@ -51,6 +57,7 @@ export default class VimImPlugin extends Plugin {
 	private currentInsertIM = '';
 	private previousMode = '';
 	private isWinPlatform = false;
+	private isMacPlatform = false;
 
 	async onload() {
 		await this.loadSettings();
@@ -74,12 +81,21 @@ export default class VimImPlugin extends Plugin {
 
 		console.debug("VimIm::OS type: " + os.type());
 		this.isWinPlatform = os.type() == 'Windows_NT';
-
-		this.currentInsertIM = this.isWinPlatform ? this.settings.windowsDefaultIM : this.settings.defaultIM;
+		this.isMacPlatform = os.type() == 'Darwin';
 
 		if (this.isWinPlatform) {
+			this.currentInsertIM = this.settings.windowsDefaultIM;
 			console.debug("VimIm Use Windows config");
 		}
+		else if (this.isMacPlatform) {
+			this.currentInsertIM = this.settings.macDefaultIM;
+			console.debug("VimIm Use Mac config");
+		}
+		else {
+			this.currentInsertIM = this.settings.defaultIM;
+			console.debug("VimIm Use Default config");
+		}
+
 	}
 
 	private getActiveView(): MarkdownView {
@@ -95,9 +111,18 @@ export default class VimImPlugin extends Plugin {
 		const { exec } = require('child_process');
 		let switchToInsert: string;
 		if (this.currentInsertIM) {
-			switchToInsert = this.isWinPlatform ?
-				this.settings.windowsSwitchCmd.replace(/{im}/, this.currentInsertIM) :
-				this.settings.switchCmd.replace(/{im}/, this.currentInsertIM);
+			if (this.isWinPlatform) {
+				switchToInsert = this.settings.windowsSwitchCmd.replace(/{im}/, this.currentInsertIM);
+			}
+			else if (this.isMacPlatform) {
+				switchToInsert = this.settings.macSwitchCmd.replace(/{im}/, this.currentInsertIM);
+			}
+			else {
+				switchToInsert = this.settings.switchCmd.replace(/{im}/, this.currentInsertIM);
+			}
+			// switchToInsert = this.isWinPlatform ?
+			// 	this.settings.windowsSwitchCmd.replace(/{im}/, this.currentInsertIM) :
+			// 	this.settings.switchCmd.replace(/{im}/, this.currentInsertIM);
 		}
 
 		console.debug("change to insert");
@@ -116,11 +141,27 @@ export default class VimImPlugin extends Plugin {
 
 	async switchToNormal() {
 		const { exec } = require('child_process');
-		const switchFromInsert = this.isWinPlatform ?
-			this.settings.windowsSwitchCmd.replace(/{im}/, this.settings.windowsDefaultIM) :
-			this.settings.switchCmd.replace(/{im}/, this.settings.defaultIM);
-		const obtainc = this.isWinPlatform ?
-			this.settings.windowsObtainCmd : this.settings.obtainCmd;
+		let switchFromInsert: string;
+		let obtainc: string;
+
+		if (this.isWinPlatform) {
+			switchFromInsert = this.settings.windowsSwitchCmd.replace(/{im}/, this.settings.windowsDefaultIM);
+			obtainc = this.settings.windowsObtainCmd;
+		}
+		else if (this.isMacPlatform) {
+			switchFromInsert = this.settings.macSwitchCmd.replace(/{im}/, this.settings.macDefaultIM);
+			obtainc = this.settings.macObtainCmd;
+		}
+		else {
+			switchFromInsert = this.settings.switchCmd.replace(/{im}/, this.settings.defaultIM);
+			obtainc = this.settings.obtainCmd;
+		}
+
+		// const switchFromInsert = this.isWinPlatform ?
+		// 	this.settings.windowsSwitchCmd.replace(/{im}/, this.settings.windowsDefaultIM) :
+		// 	this.settings.switchCmd.replace(/{im}/, this.settings.defaultIM);
+		// const obtainc = this.isWinPlatform ?
+		// 	this.settings.windowsObtainCmd : this.settings.obtainCmd;
 		console.debug("change to noInsert");
 		//[0]: Obtian im in Insert Mode
 		if (typeof obtainc != 'undefined' && obtainc) {
@@ -260,6 +301,41 @@ class SampleSettingTab extends PluginSettingTab {
 				.onChange(async (value) => {
 					console.debug('Switch Cmd: ' + value);
 					this.plugin.settings.windowsSwitchCmd = value;
+					await this.plugin.saveSettings();
+				}));
+
+		containerEl.createEl('h3', { text: 'Settings for Mac platform.' });
+		new Setting(containerEl)
+			.setName('Mac Default IM')
+			.setDesc('IM for normal mode')
+			.addText(text => text
+				.setPlaceholder('Default IM')
+				.setValue(this.plugin.settings.macDefaultIM)
+				.onChange(async (value) => {
+					console.debug('Default IM: ' + value);
+					this.plugin.settings.macDefaultIM = value;
+					await this.plugin.saveSettings();
+				}));
+		new Setting(containerEl)
+			.setName('Obtaining Command on Mac')
+			.setDesc('Command for obtaining current IM(must be excutable)')
+			.addText(text => text
+				.setPlaceholder('Obtaining Command')
+				.setValue(this.plugin.settings.macObtainCmd)
+				.onChange(async (value) => {
+					console.debug('Obtain Cmd: ' + value);
+					this.plugin.settings.macObtainCmd = value;
+					await this.plugin.saveSettings();
+				}));
+		new Setting(containerEl)
+			.setName('Switching Command on Mac')
+			.setDesc('Command for switching to specific IM(must be excutable)')
+			.addText(text => text
+				.setPlaceholder('Use {im} as placeholder of IM')
+				.setValue(this.plugin.settings.macSwitchCmd)
+				.onChange(async (value) => {
+					console.debug('Switch Cmd: ' + value);
+					this.plugin.settings.macSwitchCmd = value;
 					await this.plugin.saveSettings();
 				}));
 	}
