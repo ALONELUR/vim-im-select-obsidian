@@ -61,6 +61,7 @@ export default class VimImPlugin extends Plugin {
 			const view = this.getActiveView();
 			if (view) {
 				const editor = this.getCodeMirror(view);
+                this.initActiveLeafChange(editor.state.vim);
 				if (editor) {
 					editor.off('vim-mode-change', this.onVimModeChanged);
 					editor.on('vim-mode-change', this.onVimModeChanged);
@@ -115,36 +116,56 @@ export default class VimImPlugin extends Plugin {
 	}
 
 	async switchToNormal() {
-		const { exec } = require('child_process');
-		const switchFromInsert = this.isWinPlatform ?
-			this.settings.windowsSwitchCmd.replace(/{im}/, this.settings.windowsDefaultIM) :
-			this.settings.switchCmd.replace(/{im}/, this.settings.defaultIM);
-		const obtainc = this.isWinPlatform ?
-			this.settings.windowsObtainCmd : this.settings.obtainCmd;
-		console.debug("change to noInsert");
-		//[0]: Obtian im in Insert Mode
-		if (typeof obtainc != 'undefined' && obtainc) {
-			exec(obtainc, (error: any, stdout: any, stderr: any) => {
-				if (error) {
-					console.error(`obtain error: ${error}`);
-					return;
-				}
-				this.currentInsertIM = stdout;
-				console.debug(`obtain im: ${this.currentInsertIM}`);
-			});
-		}
-		//[1]: Switch to default im
-		if (typeof switchFromInsert != 'undefined' && switchFromInsert) {
-			exec(switchFromInsert, (error: any, stdout: any, stderr: any) => {
-				if (error) {
-					console.error(`switch error: ${error}`);
-					return;
-				}
-				console.debug(`switch im: ${switchFromInsert}`);
-			});
-		}
+        const { exec } = require('child_process');
+        console.debug("change to noInsert");
+        
+        //[0]: Obtian im in Insert Mode
+        if (this.previousMode != "normal")
+        {
+            const obtainc = this.isWinPlatform ?
+                this.settings.windowsObtainCmd : this.settings.obtainCmd;
+            
+            if (typeof obtainc != 'undefined' && obtainc) {
+                exec(obtainc, (error: any, stdout: any, stderr: any) => {
+                    if (error) {
+                        console.error(`obtain error: ${error}`);
+                        return;
+                    }
+                    this.currentInsertIM = stdout;
+                    console.debug(`obtain im: ${this.currentInsertIM}`);
+                });
+            }
 
-		this.previousMode = "normal"
+        }
+        
+        //[1]: Switch to default im
+        const switchFromInsert = this.isWinPlatform ?
+        this.settings.windowsSwitchCmd.replace(/{im}/, this.settings.windowsDefaultIM) :
+        this.settings.switchCmd.replace(/{im}/, this.settings.defaultIM);
+        if (typeof switchFromInsert != 'undefined' && switchFromInsert) {
+            exec(switchFromInsert, (error: any, stdout: any, stderr: any) => {
+                if (error) {
+                    console.error(`switch error: ${error}`);
+                    return;
+                }
+                console.debug(`switch im: ${switchFromInsert}`);
+            });
+        }
+
+        this.previousMode = "normal"
+	}
+
+    
+
+	async initActiveLeafChange(vimObj: any) {
+        if(vimObj.insertMode)
+        {
+            if (this.previousMode != "insert")this.switchToInsert();
+        }
+        else
+        {
+            this.switchToNormal();
+        }
 	}
 
 	onVimModeChanged = async (modeObj: any) => {
