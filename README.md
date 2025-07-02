@@ -28,6 +28,9 @@ The options are similar in different platform.
 | Option              | Defination                                                                                                   |
 | ------------------- | ------------------------------------------------------------------------------------------------------------ |
 | `Default IM`        | specify the input method used in normal mode                                                                 |
+| `Default Insert IM` | specify the input method used in insert mode                                                     |
+| `Default Visual IM` | specify the input method used in visual mode                                                 |
+| `Default Replace IM` | specify the input method used in replace mode, include continuous replace mode (R) and single-character replace mode (r).                                                |
 | `Obtaining Command` | Command to obtain current input method (must be excutable)                                                   |
 | `Switching Command` | Command to switch current input method (must be excutable, use `{im}` as placeholder of target input method) |
 

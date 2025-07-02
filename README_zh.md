@@ -26,6 +26,9 @@
 | 选项                | 定义                                                                 |
 | ------------------- | -------------------------------------------------------------------- |
 | `Default IM`        | 指定normal模式下使用的输入法                                         |
+| `Default Insert IM`        | 指定insert模式下使用的输入法 |
+| `Default Visual IM`        | 指定visual模式下使用的输入法 |
+| `Default Replace IM`        | 指定replace模式下使用的输入法，包括连续替换模式（R）以及单字符替换模式（r） |
 | `Obtaining Command` | 获得当前输入法的命令（必须是可执行的）                               |
 | `Switching Command` | 切换当前输入法的命令（必须是可执行的，使用`{im}`来代表输入法的位置） |
 

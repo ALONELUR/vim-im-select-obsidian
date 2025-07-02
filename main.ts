@@ -25,21 +25,33 @@ import { App, Plugin, PluginSettingTab, Setting, MarkdownView } from 'obsidian';
 
 import * as os from 'os';
 interface VimImPluginSettings {
-	defaultIM: string;
-	obtainCmd: string;
-	switchCmd: string;
-	windowsDefaultIM: string;
-	windowsObtainCmd: string;
-	windowsSwitchCmd: string;
+        defaultIM: string;
+        defaultInsertIM: string;
+        defaultVisualIM: string;
+        defaultReplaceIM: string;
+        obtainCmd: string;
+        switchCmd: string;
+        windowsDefaultIM: string;
+        windowsDefaultInsertIM: string;
+        windowsDefaultVisualIM: string;
+        windowsDefaultReplaceIM: string;
+        windowsObtainCmd: string;
+        windowsSwitchCmd: string;
 }
 
 const DEFAULT_SETTINGS: VimImPluginSettings = {
-	defaultIM: '',
-	obtainCmd: '',
-	switchCmd: '',
-	windowsDefaultIM: '',
-	windowsObtainCmd: '',
-	windowsSwitchCmd: '',
+        defaultIM: '',
+        defaultInsertIM: '',
+        defaultVisualIM: '',
+        defaultReplaceIM: '',
+        obtainCmd: '',
+        switchCmd: '',
+        windowsDefaultIM: '',
+        windowsDefaultInsertIM: '',
+        windowsDefaultVisualIM: '',
+        windowsDefaultReplaceIM: '',
+        windowsObtainCmd: '',
+        windowsSwitchCmd: '',
 }
 
 function isEmpty(obj : any) {
@@ -47,13 +59,29 @@ function isEmpty(obj : any) {
 }
 
 export default class VimImPlugin extends Plugin {
-	settings: VimImPluginSettings;
-	private currentInsertIM = '';
-	private previousMode = '';
-	private isWinPlatform = false;
+        settings: VimImPluginSettings;
+        private currentInsertIM = '';
+        private currentVisualIM = '';
+        private currentReplaceIM = '';
+        private previousMode = '';
+        private isWinPlatform = false;
+        private onVimKeypress = async (key: string) => {
+                if (key === "<Esc>") {
+                        console.info("press esc");
+                        this.switchToNormal();
+                        return;
+                }
+                if (key === "r") {
+                        console.info("press r");
+                        this.switchToInsert();
+                        return;
+                }
+        };
 
-	async onload() {
-		await this.loadSettings();
+        async onload() {
+                await this.loadSettings();
+                const vaultDir = this.app.vault.adapter.getBasePath();
+                process.chdir(vaultDir);
 
 		// when open a file, to initialize current
 		// editor type CodeMirror5 or CodeMirror6
@@ -61,10 +89,12 @@ export default class VimImPlugin extends Plugin {
 			const view = this.getActiveView();
 			if (view) {
 				const editor = this.getCodeMirror(view);
-				if (editor) {
-					editor.off('vim-mode-change', this.onVimModeChanged);
-					editor.on('vim-mode-change', this.onVimModeChanged);
-				}
+                                if (editor) {
+                                        editor.off('vim-mode-change', this.onVimModeChanged);
+                                        editor.on('vim-mode-change', this.onVimModeChanged);
+                                        editor.off('vim-keypress', this.onVimModeChanged);
+                                        editor.on('vim-keypress', this.onVimKeypress);
+                                }
 			}
 		});
 
@@ -72,10 +102,18 @@ export default class VimImPlugin extends Plugin {
 		// This adds a settings tab so the user can configure various aspects of the plugin
 		this.addSettingTab(new SampleSettingTab(this.app, this));
 
-		console.debug("VimIm::OS type: " + os.type());
-		this.isWinPlatform = os.type() == 'Windows_NT';
+                console.debug("VimIm::OS type: " + os.type());
+                this.isWinPlatform = os.type() == 'Windows_NT';
 
-		this.currentInsertIM = this.isWinPlatform ? this.settings.windowsDefaultIM : this.settings.defaultIM;
+                this.currentInsertIM = this.isWinPlatform
+                        ? (this.settings.windowsDefaultInsertIM || this.settings.windowsDefaultIM)
+                        : (this.settings.defaultInsertIM || this.settings.defaultIM);
+                this.currentVisualIM = this.isWinPlatform
+                        ? (this.settings.windowsDefaultVisualIM || this.settings.windowsDefaultIM)
+                        : (this.settings.defaultVisualIM || this.settings.defaultIM);
+                this.currentReplaceIM = this.isWinPlatform
+                        ? (this.settings.windowsDefaultReplaceIM || this.settings.windowsDefaultIM)
+                        : (this.settings.defaultReplaceIM || this.settings.defaultIM);
 
 		if (this.isWinPlatform) {
 			console.debug("VimIm Use Windows config");
@@ -91,14 +129,18 @@ export default class VimImPlugin extends Plugin {
 		return (view as any).sourceMode?.cmEditor?.cm?.cm;
 	}
 
-	async switchToInsert() {
-		const { exec } = require('child_process');
-		let switchToInsert: string;
-		if (this.currentInsertIM) {
-			switchToInsert = this.isWinPlatform ?
-				this.settings.windowsSwitchCmd.replace(/{im}/, this.currentInsertIM) :
-				this.settings.switchCmd.replace(/{im}/, this.currentInsertIM);
-		}
+        async switchToInsert() {
+                const { exec } = require('child_process');
+                let switchToInsert: string;
+                let targetIM = this.isWinPlatform ?
+                        (this.settings.windowsDefaultInsertIM || this.currentInsertIM) :
+                        (this.settings.defaultInsertIM || this.currentInsertIM);
+                this.currentInsertIM = targetIM;
+                if (targetIM) {
+                        switchToInsert = this.isWinPlatform ?
+                                this.settings.windowsSwitchCmd.replace(/{im}/, targetIM) :
+                                this.settings.switchCmd.replace(/{im}/, targetIM);
+                }
 
 		console.debug("change to insert");
 		if (typeof switchToInsert != 'undefined' && switchToInsert) {
@@ -111,58 +153,127 @@ export default class VimImPlugin extends Plugin {
 			});
 		}
 
-		this.previousMode = "insert"
-	}
+                this.previousMode = "insert"
+        }
 
-	async switchToNormal() {
-		const { exec } = require('child_process');
-		const switchFromInsert = this.isWinPlatform ?
-			this.settings.windowsSwitchCmd.replace(/{im}/, this.settings.windowsDefaultIM) :
-			this.settings.switchCmd.replace(/{im}/, this.settings.defaultIM);
-		const obtainc = this.isWinPlatform ?
-			this.settings.windowsObtainCmd : this.settings.obtainCmd;
-		console.debug("change to noInsert");
-		//[0]: Obtian im in Insert Mode
-		if (typeof obtainc != 'undefined' && obtainc) {
-			exec(obtainc, (error: any, stdout: any, stderr: any) => {
-				if (error) {
-					console.error(`obtain error: ${error}`);
-					return;
-				}
-				this.currentInsertIM = stdout;
-				console.debug(`obtain im: ${this.currentInsertIM}`);
-			});
-		}
-		//[1]: Switch to default im
-		if (typeof switchFromInsert != 'undefined' && switchFromInsert) {
-			exec(switchFromInsert, (error: any, stdout: any, stderr: any) => {
-				if (error) {
-					console.error(`switch error: ${error}`);
-					return;
-				}
-				console.debug(`switch im: ${switchFromInsert}`);
-			});
-		}
+        async switchToVisual() {
+                const { exec } = require('child_process');
+                let switchToVisual: string;
+                let targetIM = this.isWinPlatform ?
+                        (this.settings.windowsDefaultVisualIM || this.currentVisualIM) :
+                        (this.settings.defaultVisualIM || this.currentVisualIM);
+                this.currentVisualIM = targetIM;
+                if (targetIM) {
+                        switchToVisual = this.isWinPlatform ?
+                                this.settings.windowsSwitchCmd.replace(/{im}/, targetIM) :
+                                this.settings.switchCmd.replace(/{im}/, targetIM);
+                }
 
-		this.previousMode = "normal"
-	}
+                console.debug("change to visual");
+                if (typeof switchToVisual != 'undefined' && switchToVisual) {
+                        exec(switchToVisual, (error: any, stdout: any, stderr: any) => {
+                                if (error) {
+                                        console.error(`switch error: ${error}`);
+                                        return;
+                                }
+                                console.debug(`switch im: ${switchToVisual}`);
+                        });
+                }
 
-	onVimModeChanged = async (modeObj: any) => {
-		if (isEmpty(modeObj)) {
-			return;
-		}
-		switch (modeObj.mode) {
-			case "insert":
-				this.switchToInsert();
-				break;
-			default:
-				if (this.previousMode != "insert") {
-					break;
-				}
-				this.switchToNormal();
-				break;
-		}
-	};
+                this.previousMode = "visual";
+        }
+
+        async switchToReplace() {
+                const { exec } = require('child_process');
+                let switchToReplace: string;
+                let targetIM = this.isWinPlatform ?
+                        (this.settings.windowsDefaultReplaceIM || this.currentReplaceIM) :
+                        (this.settings.defaultReplaceIM || this.currentReplaceIM);
+                this.currentReplaceIM = targetIM;
+                if (targetIM) {
+                        switchToReplace = this.isWinPlatform ?
+                                this.settings.windowsSwitchCmd.replace(/{im}/, targetIM) :
+                                this.settings.switchCmd.replace(/{im}/, targetIM);
+                }
+
+                console.debug("change to replace");
+                if (typeof switchToReplace != 'undefined' && switchToReplace) {
+                        exec(switchToReplace, (error: any, stdout: any, stderr: any) => {
+                                if (error) {
+                                        console.error(`switch error: ${error}`);
+                                        return;
+                                }
+                                console.debug(`switch im: ${switchToReplace}`);
+                        });
+                }
+
+                this.previousMode = "replace";
+        }
+
+        async switchToNormal() {
+                const { exec } = require('child_process');
+                const switchCmd = this.isWinPlatform ?
+                        this.settings.windowsSwitchCmd.replace(/{im}/, this.settings.windowsDefaultIM) :
+                        this.settings.switchCmd.replace(/{im}/, this.settings.defaultIM);
+                const obtainc = this.isWinPlatform ? this.settings.windowsObtainCmd : this.settings.obtainCmd;
+                const defaultInsert = this.isWinPlatform ? this.settings.windowsDefaultInsertIM : this.settings.defaultInsertIM;
+
+                console.debug("change to normal");
+                if (this.previousMode === "insert") {
+                        if (defaultInsert) {
+                                this.currentInsertIM = defaultInsert;
+                        } else if (typeof obtainc != 'undefined' && obtainc) {
+                                exec(obtainc, (error: any, stdout: any, stderr: any) => {
+                                        if (error) {
+                                                console.error(`obtain error: ${error}`);
+                                                return;
+                                        }
+                                        this.currentInsertIM = stdout;
+                                        console.debug(`obtain im: ${this.currentInsertIM}`);
+                                });
+                        }
+                }
+
+                if (typeof switchCmd != 'undefined' && switchCmd) {
+                        exec(switchCmd, (error: any, stdout: any, stderr: any) => {
+                                if (error) {
+                                        console.error(`switch error: ${error}`);
+                                        return;
+                                }
+                                console.debug(`switch im: ${switchCmd}`);
+                        });
+                }
+
+                this.previousMode = "normal";
+        }
+
+        onVimModeChanged = async (modeObj: any) => {
+                if (isEmpty(modeObj)) {
+                        console.info("empty");
+                        return;
+                }
+                switch (modeObj.mode) {
+                        case "insert":
+                                this.switchToInsert();
+                                console.info("insert");
+                                break;
+                        case "visual":
+                                this.switchToVisual();
+                                console.info("visual");
+                                break;
+                        case "replace":
+                                this.switchToReplace();
+                                console.info("replace");
+                                break;
+                        default:
+                                console.info("normal");
+                                if (this.previousMode === "normal") {
+                                        break;
+                                }
+                                this.switchToNormal();
+                                break;
+                }
+        };
 
 	onunload() {
 		console.debug("onunload");
@@ -194,17 +305,50 @@ class SampleSettingTab extends PluginSettingTab {
 		containerEl.createEl('h2', { text: 'Vim IM Select Settings.' });
 
 		containerEl.createEl('h3', { text: 'Settings for default platform.' });
-		new Setting(containerEl)
-			.setName('Default IM')
-			.setDesc('IM for normal mode')
-			.addText(text => text
-				.setPlaceholder('Default IM')
-				.setValue(this.plugin.settings.defaultIM)
-				.onChange(async (value) => {
-					console.debug('Default IM: ' + value);
-					this.plugin.settings.defaultIM = value;
-					await this.plugin.saveSettings();
-				}));
+                new Setting(containerEl)
+                        .setName('Default IM')
+                        .setDesc('IM for normal mode')
+                        .addText(text => text
+                                .setPlaceholder('Default IM')
+                                .setValue(this.plugin.settings.defaultIM)
+                                .onChange(async (value) => {
+                                        console.debug('Default IM: ' + value);
+                                        this.plugin.settings.defaultIM = value;
+                                        await this.plugin.saveSettings();
+                                }));
+                new Setting(containerEl)
+                        .setName('Default Insert IM')
+                        .setDesc('IM for insert mode')
+                        .addText(text => text
+                                .setPlaceholder('Default Insert IM')
+                                .setValue(this.plugin.settings.defaultInsertIM)
+                                .onChange(async (value) => {
+                                        console.debug('Default Insert IM: ' + value);
+                                        this.plugin.settings.defaultInsertIM = value;
+                                        await this.plugin.saveSettings();
+                                }));
+                new Setting(containerEl)
+                        .setName('Default Visual IM')
+                        .setDesc('IM for visual mode')
+                        .addText(text => text
+                                .setPlaceholder('Default Visual IM')
+                                .setValue(this.plugin.settings.defaultVisualIM)
+                                .onChange(async (value) => {
+                                        console.debug('Default Visual IM: ' + value);
+                                        this.plugin.settings.defaultVisualIM = value;
+                                        await this.plugin.saveSettings();
+                                }));
+                new Setting(containerEl)
+                        .setName('Default Replace IM')
+                        .setDesc('IM for replace mode')
+                        .addText(text => text
+                                .setPlaceholder('Default Replace IM')
+                                .setValue(this.plugin.settings.defaultReplaceIM)
+                                .onChange(async (value) => {
+                                        console.debug('Default Replace IM: ' + value);
+                                        this.plugin.settings.defaultReplaceIM = value;
+                                        await this.plugin.saveSettings();
+                                }));
 		new Setting(containerEl)
 			.setName('Obtaining Command')
 			.setDesc('Command for obtaining current IM(must be excutable)')
@@ -229,17 +373,50 @@ class SampleSettingTab extends PluginSettingTab {
 				}));
 
 		containerEl.createEl('h3', { text: 'Settings for Windows platform.' });
-		new Setting(containerEl)
-			.setName('Windows Default IM')
-			.setDesc('IM for normal mode')
-			.addText(text => text
-				.setPlaceholder('Default IM')
-				.setValue(this.plugin.settings.windowsDefaultIM)
-				.onChange(async (value) => {
-					console.debug('Default IM: ' + value);
-					this.plugin.settings.windowsDefaultIM = value;
-					await this.plugin.saveSettings();
-				}));
+                new Setting(containerEl)
+                        .setName('Windows Default IM')
+                        .setDesc('IM for normal mode')
+                        .addText(text => text
+                                .setPlaceholder('Default IM')
+                                .setValue(this.plugin.settings.windowsDefaultIM)
+                                .onChange(async (value) => {
+                                        console.debug('Default IM: ' + value);
+                                        this.plugin.settings.windowsDefaultIM = value;
+                                        await this.plugin.saveSettings();
+                                }));
+                new Setting(containerEl)
+                        .setName('Windows Default Insert IM')
+                        .setDesc('IM for insert mode')
+                        .addText(text => text
+                                .setPlaceholder('Default Insert IM')
+                                .setValue(this.plugin.settings.windowsDefaultInsertIM)
+                                .onChange(async (value) => {
+                                        console.debug('Default Insert IM: ' + value);
+                                        this.plugin.settings.windowsDefaultInsertIM = value;
+                                        await this.plugin.saveSettings();
+                                }));
+                new Setting(containerEl)
+                        .setName('Windows Default Visual IM')
+                        .setDesc('IM for visual mode')
+                        .addText(text => text
+                                .setPlaceholder('Default Visual IM')
+                                .setValue(this.plugin.settings.windowsDefaultVisualIM)
+                                .onChange(async (value) => {
+                                        console.debug('Default Visual IM: ' + value);
+                                        this.plugin.settings.windowsDefaultVisualIM = value;
+                                        await this.plugin.saveSettings();
+                                }));
+                new Setting(containerEl)
+                        .setName('Windows Default Replace IM')
+                        .setDesc('IM for replace mode')
+                        .addText(text => text
+                                .setPlaceholder('Default Replace IM')
+                                .setValue(this.plugin.settings.windowsDefaultReplaceIM)
+                                .onChange(async (value) => {
+                                        console.debug('Default Replace IM: ' + value);
+                                        this.plugin.settings.windowsDefaultReplaceIM = value;
+                                        await this.plugin.saveSettings();
+                                }));
 		new Setting(containerEl)
 			.setName('Obtaining Command on Windows')
 			.setDesc('Command for obtaining current IM(must be excutable)')
