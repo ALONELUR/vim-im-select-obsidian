@@ -26,6 +26,7 @@ import { App, Plugin, PluginSettingTab, Setting, MarkdownView } from 'obsidian';
 import * as os from 'os';
 interface VimImPluginSettings {
 	defaultIM: string;
+	insertIM: string;
 	obtainCmd: string;
 	switchCmd: string;
 	windowsDefaultIM: string;
@@ -35,6 +36,7 @@ interface VimImPluginSettings {
 
 const DEFAULT_SETTINGS: VimImPluginSettings = {
 	defaultIM: '',
+	insertIM: '',
 	obtainCmd: '',
 	switchCmd: '',
 	windowsDefaultIM: '',
@@ -61,14 +63,29 @@ export default class VimImPlugin extends Plugin {
 			const view = this.getActiveView();
 			if (view) {
 				const editor = this.getCodeMirror(view);
-                this.initActiveLeafChange(editor.state.vim);
 				if (editor) {
+					if (editor.state?.vim) {
+						this.initActiveLeafChange(editor.state.vim);
+					}
 					editor.off('vim-mode-change', this.onVimModeChanged);
 					editor.on('vim-mode-change', this.onVimModeChanged);
 				}
 			}
 		});
 
+		// Re-sync on window focus: while we were in the background another
+		// application may have switched the IME, leaving normal mode stuck with
+		// a non-English IM.
+		window.addEventListener('focus', () => {
+			const view = this.getActiveView();
+			if (!view) {
+				return;
+			}
+			const editor = this.getCodeMirror(view);
+			if (editor?.state?.vim) {
+				this.initActiveLeafChange(editor.state.vim);
+			}
+		});
 
 		// This adds a settings tab so the user can configure various aspects of the plugin
 		this.addSettingTab(new SampleSettingTab(this.app, this));
@@ -76,14 +93,19 @@ export default class VimImPlugin extends Plugin {
 		console.debug("VimIm::OS type: " + os.type());
 		this.isWinPlatform = os.type() == 'Windows_NT';
 
-		this.currentInsertIM = this.isWinPlatform ? this.settings.windowsDefaultIM : this.settings.defaultIM;
+		// `insertIM` pins the IM used in insert/replace mode (issue #11) instead of
+		// relying on a round-trip through the `Obtaining Command`. When it is empty
+		// we keep the legacy behaviour and start from `defaultIM`.
+		this.currentInsertIM = this.isWinPlatform
+			? this.settings.windowsDefaultIM
+			: (this.settings.insertIM || this.settings.defaultIM);
 
 		if (this.isWinPlatform) {
 			console.debug("VimIm Use Windows config");
 		}
 	}
 
-	private getActiveView(): MarkdownView {
+	private getActiveView(): MarkdownView | null {
 		return this.app.workspace.getActiveViewOfType(MarkdownView);
 	}
 
@@ -92,64 +114,91 @@ export default class VimImPlugin extends Plugin {
 		return (view as any).sourceMode?.cmEditor?.cm?.cm;
 	}
 
+	/**
+	 * `{pluginDir}` 让命令引用**随插件一起分发**的文件（如仓库内的 im-select2.exe），
+	 * 不必在每台机器上写死绝对路径 —— 插件目录跟着 vault 走。
+	 * 需要含空格的路径时在 data.json 里自己加引号：`"{pluginDir}/im-select2.exe" {im}`。
+	 */
+	private resolveCmd(cmd: string): string {
+		if (!cmd || cmd.indexOf('{pluginDir}') < 0) {
+			return cmd;
+		}
+		const adapter: any = this.app.vault.adapter;
+		const base: string = typeof adapter.getBasePath === 'function'
+			? adapter.getBasePath()
+			: adapter.basePath;
+		return cmd.split('{pluginDir}').join(`${base}/.obsidian/plugins/${this.manifest.id}`);
+	}
+
+	/** 执行命令并取回 stdout（Promise 化 —— 「先读状态、再切换」必须串行）。 */
+	private execCapture(cmd: string): Promise<string> {
+		return new Promise((resolve) => {
+			require('child_process').exec(cmd, (error: any, stdout: string) => {
+				if (error) {
+					console.error(`obtain error: ${error}`);
+					resolve('');
+					return;
+				}
+				resolve((stdout || '').trim());
+			});
+		});
+	}
+
+	/** 执行命令，只关心成功/失败。 */
+	private execFire(cmd: string): Promise<void> {
+		return new Promise((resolve) => {
+			require('child_process').exec(cmd, (error: any) => {
+				if (error) {
+					console.error(`switch error: ${error}`);
+				} else {
+					console.debug(`switch im: ${cmd}`);
+				}
+				resolve();
+			});
+		});
+	}
+
 	async switchToInsert() {
-		const { exec } = require('child_process');
 		let switchToInsert: string;
 		if (this.currentInsertIM) {
-			switchToInsert = this.isWinPlatform ?
+			switchToInsert = this.resolveCmd(this.isWinPlatform ?
 				this.settings.windowsSwitchCmd.replace(/{im}/, this.currentInsertIM) :
-				this.settings.switchCmd.replace(/{im}/, this.currentInsertIM);
+				this.settings.switchCmd.replace(/{im}/, this.currentInsertIM));
 		}
 
 		console.debug("change to insert");
 		if (typeof switchToInsert != 'undefined' && switchToInsert) {
-			exec(switchToInsert, (error: any, stdout: any, stderr: any) => {
-				if (error) {
-					console.error(`switch error: ${error}`);
-					return;
-				}
-				console.debug(`switch im: ${switchToInsert}`);
-			});
+			await this.execFire(switchToInsert);
 		}
 
 		this.previousMode = "insert"
 	}
 
 	async switchToNormal() {
-        const { exec } = require('child_process');
         console.debug("change to noInsert");
-        
-        //[0]: Obtian im in Insert Mode
+
+        //[0]: 先读当前状态 —— **必须等它返回再切**，否则读到的是切换后的值
+        //     （这里刻意做成串行：原来的两个 exec 并发，谁先跑不确定）
         if (this.previousMode != "normal")
         {
-            const obtainc = this.isWinPlatform ?
-                this.settings.windowsObtainCmd : this.settings.obtainCmd;
-            
-            if (typeof obtainc != 'undefined' && obtainc) {
-                exec(obtainc, (error: any, stdout: any, stderr: any) => {
-                    if (error) {
-                        console.error(`obtain error: ${error}`);
-                        return;
-                    }
-                    this.currentInsertIM = stdout;
-                    console.debug(`obtain im: ${this.currentInsertIM}`);
-                });
-            }
+            const obtainc = this.resolveCmd(this.isWinPlatform ?
+                this.settings.windowsObtainCmd : this.settings.obtainCmd);
 
-        }
-        
-        //[1]: Switch to default im
-        const switchFromInsert = this.isWinPlatform ?
-        this.settings.windowsSwitchCmd.replace(/{im}/, this.settings.windowsDefaultIM) :
-        this.settings.switchCmd.replace(/{im}/, this.settings.defaultIM);
-        if (typeof switchFromInsert != 'undefined' && switchFromInsert) {
-            exec(switchFromInsert, (error: any, stdout: any, stderr: any) => {
-                if (error) {
-                    console.error(`switch error: ${error}`);
-                    return;
+            if (obtainc) {
+                const captured = await this.execCapture(obtainc);
+                if (captured) {
+                    this.currentInsertIM = captured;
                 }
-                console.debug(`switch im: ${switchFromInsert}`);
-            });
+                console.debug(`obtain im: ${this.currentInsertIM}`);
+            }
+        }
+
+        //[1]: 再切到 normal
+        const switchFromInsert = this.resolveCmd(this.isWinPlatform ?
+        this.settings.windowsSwitchCmd.replace(/{im}/, this.settings.windowsDefaultIM) :
+        this.settings.switchCmd.replace(/{im}/, this.settings.defaultIM));
+        if (switchFromInsert) {
+            await this.execFire(switchFromInsert);
         }
 
         this.previousMode = "normal"
@@ -174,6 +223,7 @@ export default class VimImPlugin extends Plugin {
 		}
 		switch (modeObj.mode) {
 			case "insert":
+			case "replace":
 				this.switchToInsert();
 				break;
 			default:
@@ -224,6 +274,17 @@ class SampleSettingTab extends PluginSettingTab {
 				.onChange(async (value) => {
 					console.debug('Default IM: ' + value);
 					this.plugin.settings.defaultIM = value;
+					await this.plugin.saveSettings();
+				}));
+		new Setting(containerEl)
+			.setName('Insert IM')
+			.setDesc('IM used in insert/replace mode. Leave empty to keep the previous behaviour (reuse the IM returned by the obtaining command)')
+			.addText(text => text
+				.setPlaceholder('Insert IM')
+				.setValue(this.plugin.settings.insertIM)
+				.onChange(async (value) => {
+					console.debug('Insert IM: ' + value);
+					this.plugin.settings.insertIM = value;
 					await this.plugin.saveSettings();
 				}));
 		new Setting(containerEl)
