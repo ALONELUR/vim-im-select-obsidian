@@ -26,6 +26,7 @@ import { App, Plugin, PluginSettingTab, Setting, MarkdownView } from 'obsidian';
 import * as os from 'os';
 interface VimImPluginSettings {
 	defaultIM: string;
+	insertIM: string;
 	obtainCmd: string;
 	switchCmd: string;
 	windowsDefaultIM: string;
@@ -35,6 +36,7 @@ interface VimImPluginSettings {
 
 const DEFAULT_SETTINGS: VimImPluginSettings = {
 	defaultIM: '',
+	insertIM: '',
 	obtainCmd: '',
 	switchCmd: '',
 	windowsDefaultIM: '',
@@ -71,6 +73,19 @@ export default class VimImPlugin extends Plugin {
 			}
 		});
 
+		// Re-sync on window focus: while we were in the background another
+		// application may have switched the IME, leaving normal mode stuck with
+		// a non-English IM.
+		window.addEventListener('focus', () => {
+			const view = this.getActiveView();
+			if (!view) {
+				return;
+			}
+			const editor = this.getCodeMirror(view);
+			if (editor?.state?.vim) {
+				this.initActiveLeafChange(editor.state.vim);
+			}
+		});
 
 		// This adds a settings tab so the user can configure various aspects of the plugin
 		this.addSettingTab(new SampleSettingTab(this.app, this));
@@ -78,7 +93,12 @@ export default class VimImPlugin extends Plugin {
 		console.debug("VimIm::OS type: " + os.type());
 		this.isWinPlatform = os.type() == 'Windows_NT';
 
-		this.currentInsertIM = this.isWinPlatform ? this.settings.windowsDefaultIM : this.settings.defaultIM;
+		// `insertIM` pins the IM used in insert/replace mode (issue #11) instead of
+		// relying on a round-trip through the `Obtaining Command`. When it is empty
+		// we keep the legacy behaviour and start from `defaultIM`.
+		this.currentInsertIM = this.isWinPlatform
+			? this.settings.windowsDefaultIM
+			: (this.settings.insertIM || this.settings.defaultIM);
 
 		if (this.isWinPlatform) {
 			console.debug("VimIm Use Windows config");
@@ -227,6 +247,17 @@ class SampleSettingTab extends PluginSettingTab {
 				.onChange(async (value) => {
 					console.debug('Default IM: ' + value);
 					this.plugin.settings.defaultIM = value;
+					await this.plugin.saveSettings();
+				}));
+		new Setting(containerEl)
+			.setName('Insert IM')
+			.setDesc('IM used in insert/replace mode. Leave empty to keep the previous behaviour (reuse the IM returned by the obtaining command)')
+			.addText(text => text
+				.setPlaceholder('Insert IM')
+				.setValue(this.plugin.settings.insertIM)
+				.onChange(async (value) => {
+					console.debug('Insert IM: ' + value);
+					this.plugin.settings.insertIM = value;
 					await this.plugin.saveSettings();
 				}));
 		new Setting(containerEl)
