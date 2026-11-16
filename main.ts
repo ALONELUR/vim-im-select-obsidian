@@ -61,8 +61,10 @@ export default class VimImPlugin extends Plugin {
 			const view = this.getActiveView();
 			if (view) {
 				const editor = this.getCodeMirror(view);
-                this.initActiveLeafChange(editor.state.vim);
 				if (editor) {
+					if (editor.state?.vim) {
+						this.initActiveLeafChange(editor.state.vim);
+					}
 					editor.off('vim-mode-change', this.onVimModeChanged);
 					editor.on('vim-mode-change', this.onVimModeChanged);
 				}
@@ -83,7 +85,7 @@ export default class VimImPlugin extends Plugin {
 		}
 	}
 
-	private getActiveView(): MarkdownView {
+	private getActiveView(): MarkdownView | null {
 		return this.app.workspace.getActiveViewOfType(MarkdownView);
 	}
 
@@ -174,6 +176,7 @@ export default class VimImPlugin extends Plugin {
 		}
 		switch (modeObj.mode) {
 			case "insert":
+			case "replace":
 				this.switchToInsert();
 				break;
 			default:
